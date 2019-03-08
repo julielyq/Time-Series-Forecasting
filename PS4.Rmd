@@ -1,0 +1,88 @@
+---
+title: "Problem Set 4"
+author: "Yunqiu(Julie) Li"
+date: "Spring 2019"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r, message = FALSE, warning= FALSE}
+library(forecast)
+library(zoo)
+```
+
+1. For this problem load the Dow Jones industrial price series. As in class find the 150 moving average. Generate a variable called strategy which is 1 when the price is above the moving average, and -1 when it is below.
+
+```{r}
+# read in data
+dow.data <- read.csv("DowDaily.csv")
+n = nrow(dow.data)
+
+# Interpret dates
+dates <- as.Date(dow.data$Date,format="%m/%d/%Y")
+
+# generate price and volume zoo time series
+dowts <- zoo(dow.data$Close,dates)
+dowVolts <- zoo(dow.data$Volume,dates)
+
+# generate return time series
+retts <- diff(log(dowts))
+
+# create moving average 
+dowma <- rollmean(dowts,k=150,align="right")
+dowts <- dowts[-(1:149)]
+n <- length(dowts)
+ret <- diff(log(dowts), lag=1) ## return on t+1
+
+# Generate a variable called strategy which is 1 when the price is above the moving average, and -1 when it is below.
+strategy <- (dowts>=dowma)*(1) + (dowts<dowma)*(-1)
+
+```
+
+a. Multiply strategy(t) by the return(t+1). Does this feel like a strategy where you are going long and short in the Dow?, Why?
+```{r}
+final_strategy <- strategy*ret
+# take a peak at final_strategy
+head(final_strategy)
+```
+Yes，this feel like a strategy. The varaible "strategy" takes on value of 1 when the price is above the moving average, and -1 when it is below, which indicates whether the Dow is in the money or out of the money. The variable "ret" indicate whether the stock return is positive or negative. By multipling these two variables together, we can decide to buy or sell Dow depend on wether final_strategy is positive or negative. We could consider to buy the stock when the final_strategy is positive.
+
+
+b. What is the mean for this strategy, and its standard deviation?
+```{r}
+sprintf("The mean for this strategy is %s.", round(mean(final_strategy),5))
+sprintf("The standard deviation for this strategy is %s.", round(sd(final_strategy),5))
+```
+
+
+c. Assuming a risk free rate of zero, find the daily Sharpe ratio which is the ratio of the mean return divided by the standard deviation. Convert this to an annualized Sharpe ratio by multiplying by sqrt(250). 250 are the number of trading days in most years.
+```{r}
+daily_sharp <- mean(ret)/sd(ret)
+sprintf("The daily sharp ratio is %s.", round(daily_sharp,5))
+annually_sharp <- mean(ret)/sd(ret)*sqrt(250)
+sprintf("The annualized sharp ratio is %s.", round(annually_sharp,5))
+```
+
+d. Also, perform a t-test on that return (from the strategy) to see if it is significantly different from zero. (Report a two-tailed p-value for this which is the probability of a value being farther from zero for the test statistic, return.)
+```{r}
+t_test1 <- t.test(final_strategy, alternative = "two.sided", mu=0)
+t_test1
+sprintf("The p-value is %s.", round(t_test1$p.value, 5))
+sprintf("The t statistic is %s.", round(t_test1$statistic, 5))
+```
+The p-value is close to 0 and the t-stat is 18.64, so we can reject the null hypothesis that the true mean for final_stategy is 0. As a result, return (from the strategy) is significantly different from 0.
+
+e. Estimate the return for this strategy over the last decade (2500 days). Report the same t-test from the last part for this recent window on the strategy.
+```{r}
+# generate recent window of 2500 days
+last_return <- final_strategy[(length(final_strategy)-2499):length(final_strategy)]
+t_test2 <- t.test(last_return, alternative = "two.sided", mu=0)
+t_test2
+sprintf("The p-value is %s.", round(t_test2$p.value, 5))
+sprintf("The t statistic is %s.", round(t_test2$statistic, 5))
+
+```
+The p-value is 0 and the t-stat is 4.96, so we can reject the null hypothesis that the true mean for return(over the last decade) is 0. As a result, return (over the decade) is significantly different from 0.

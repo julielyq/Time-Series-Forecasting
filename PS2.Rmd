@@ -1,0 +1,198 @@
+---
+title: "Problem Set 2 "
+author: "Yunqiu(Julie) Li"
+date: "Spring 2019"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r, message = FALSE, warning= FALSE}
+library(forecast)
+library(ggplot2)
+```
+
+# Problem 1: For this problem load the Logan airport data set from the lecture csv file.
+## Create time series for the domestic and international passengers.
+```{r}
+logan.data <- read.csv("LoganPassengers.csv")
+logan.data <- logan.data[logan.data$total<5000000,]
+logan.dom <- ts(logan.data$domestic, start = c(2002,10), freq = 12)
+logan.int<- ts(logan.data$international, start = c(2002,10), freq = 12)
+```
+
+## Plot both of these lines in the same plot. (Hint, use the plot command, and then the lines command for this. Type help(lines) for help on the lines command.
+```{r}
+plot(logan.dom,xlab="Year",ylab="Passengers",bty="l", ylim=range(90000, 1500000), col = "blue")
+lines(logan.int, col = "red")
+legend("topleft",legend=c("Domestic", "International"),col=c("blue","red"),lty=1:1, cex = 0.7)
+grid()
+```
+
+## Describe any similarities and differences between the two.
+Similarities:
+
+* The patterns for domestic passengers and international passenger have an upward trend.
+
+* The number of domstic passengers and international passengers both have seasonality variations.
+
+* The seasonality effects tend to increase over time.
+
+Differences:
+
+* The overall scale of internaiontal passengers is way larger than the overall scale of domestic passengers.
+
+* International passengers experience a larger seasonal violatility.
+
+* There is a significant dip in the number of international passengers at the beginning of 2019.
+
+* Within a year, the patterns of fluctuation in domestic passengers and international passengers are different, which indicates distinct customer travel preference.
+
+
+## Repeat this plot for a short window from 2014 to the end of the data set.
+```{r}
+logan.dom.zoom <- window(logan.dom,start=c(2014,1))
+logan.int.zoom <- window(logan.int,start=c(2014,1))
+plot(logan.dom.zoom,xlab="Year",ylab="Passengers",bty="l", ylim=range(90000, 1600000), col = "blue")
+lines(logan.int.zoom, col = "red")
+legend("topleft",legend=c("Domestic", "International"),col=c("blue","red"),lty=1:1, cex = 0.7)
+grid()
+```
+
+# Problem 2: For this problem use the global temperature data that we used in class. Load and convert to an R ts object as we did in class. Define the last 20 years of data as the validation set, and the remaining data the training set.
+## Plot the full data set.
+```{r}
+temp.data <- read.csv("globalTemps.csv")
+temp.ts <- ts(temp.data$temp,start=1880,freq=1)
+temp.smooth <- ts(temp.data$Lowess5,start=1880,freq=1)
+stepsAhead <- 20
+nTrain <- length(temp.ts) - stepsAhead
+temp.train <- window(temp.ts, start = 1880, end = 1880-1+nTrain)
+temp.test <- window(temp.ts, start = 1880+nTrain, end = 1880-1+nTrain + stepsAhead)
+plot(temp.ts,xlab="Year",ylab="Global surface temp")
+lines(temp.smooth, col = "red")
+grid()
+```
+
+## Now estimate a model with just a linear trend in it using the training data. Report the mean squared forecast error and mean absolute error for both the training and validation samples.
+```{r}
+temp.lm <-  tslm(temp.train ~ trend)
+temp.lm.pred <- forecast(temp.lm, h = stepsAhead, level = 0)
+# validation forecast errors 
+valid.err <- temp.test - temp.lm.pred$mean
+# train forecast errors 
+train.err <- temp.train - temp.lm$fitted.values
+
+# train mean squared forecast error
+mse.train <- mean( (train.err)^2 )
+# validation mean squared forecast error
+mse.test <- mean( (valid.err)^2 )
+# train mean absolute error
+mae.train <- mean(abs(train.err))
+# validation mean absolute error
+mae.test <- mean(abs(valid.err))
+
+sprintf("The training sample MSE is %s", round(mse.train,5))
+sprintf("The validation sample MSE is %s", round(mse.test,5))
+sprintf("The training sample MAE is %s", round(mae.train,5))
+sprintf("The validation sample MAE is %s", round(mae.test,5))
+```
+
+## Plot both parts of the data set along with the fitted model in the training and validation sets.
+```{r}
+plot(temp.lm.pred,  ylab = "Global surface temp", xlab = "Year", bty = "l",  flty = 2, main = "", ylim=c(-0.5,1))
+# plot fitted values in the training period
+lines(temp.lm$fitted, lwd = 2)
+# plot data in the validation period
+lines(temp.test)
+lines(temp.test, col="red")
+lines(c(1998,1998), c(-0.5, 1),lwd=3,col="red") 
+text(1940, 1, "Training",cex=1.25)
+text(2010, 1, "Validation",cex=1.25)
+grid()
+```
+
+## Now change the model to a quadratic trend model. Report the mean squared errors, and the mean absolute error in the training and validation data sets.
+```{r}
+temp.qm <-  tslm(temp.train ~ trend + I(trend^2))
+temp.qm.pred <- forecast(temp.qm, h = stepsAhead, level = 0)
+
+# train forecast errors 
+temp.train.err <- temp.train - temp.qm$fitted.values
+# validation forecast errors 
+temp.valid.err <- temp.test - temp.qm.pred$mean
+
+# train mean squared forecast error
+temp.mse.train <- mean( (temp.train.err)^2 )
+# validation mean squared forecast error
+temp.mse.test <- mean( (temp.valid.err)^2 )
+# train mean absolute error
+temp.mae.train <- mean(abs(temp.train.err))
+# validation mean absolute error
+temp.mae.test <- mean(abs(temp.valid.err))
+
+sprintf("The training sample MSE is %s", round(temp.mse.train,5))
+sprintf("The validation sample MSE is %s", round(temp.mse.test,5))
+sprintf("The training sample MAE is %s", round(temp.mae.train,5))
+sprintf("The validation sample MAE is %s", round(temp.mae.test,5))
+```
+
+# Problem 3: For this problem load the US unemployment data. Write R code to load the data set, and convert it to a ts object. Let your training set go from Jan 1985 to Dec 2009. The remaining data after Dec 2009 is the validation set. Fit a quadratic trend model to the training data, and use it to forecast the validation set.
+```{r}
+unemploy.data <- read.csv("UNRATE.csv")
+unemploy.ts <- ts(unemploy.data$UNRATE,start=c(1948,1),freq=12)
+unemploy.train <- window(unemploy.ts, start = c(1985,1), end = c(2009,12))
+unemploy.valid <- window(unemploy.ts, start = c(2010,1))
+unemploy.qm <-  tslm(unemploy.train ~ trend + I(trend^2))
+unemploy.qm.pred <- forecast(unemploy.qm, h = 103, level = 95)
+```
+
+## Plot the quadratic trend forecast in the training and validation period, and also show the 95 percent confidence bands for the forecast.
+```{r}
+plot(unemploy.qm.pred, ylab = "Unemployment Rate", bty='l', xlab = "Year", main = "", flty = 2)
+lines(unemploy.qm$fitted, lwd = 2)
+lines(unemploy.valid, col="red")
+lines(c(2010.1, 2010.1), c(0,25), lwd=3, col="red") 
+text(1998, 12, "Training", cex=1.25)
+text(2015, 12, "Validation", cex=1.25)
+grid()
+```
+
+## Estimate the mean squared error and absolute forecast error for both the training and validation periods.
+```{r}
+unemploy.train.err <- unemploy.train - unemploy.qm$fitted.values
+unemploy.valid.err <- unemploy.valid - unemploy.qm.pred$mean
+unemploy.mse.train <- mean(unemploy.train.err^2)
+unemploy.mse.test <- mean(unemploy.valid.err^2)
+unemploy.mae.train <- mean(abs(unemploy.train.err))
+unemploy.mae.test <- mean(abs(unemploy.valid.err))
+
+sprintf("The training sample MSE is %s", round(unemploy.mse.train,5))
+sprintf("The validation sample MSE is %s", round(unemploy.mse.test,5))
+sprintf("The training sample MAE is %s", round(unemploy.mae.train,5))
+sprintf("The validation sample MAE is %s", round(unemploy.mae.test,5))
+```
+
+## Repeat this with a naive forecast starting at the end of the training period. Use the naive() function, and remember to plot the 95 percent confidence bands.
+```{r}
+unemploy.qm.naive <- naive(unemploy.train, h = 103, level = 95) 
+plot(unemploy.qm.naive, ylab = "Unemployment Rate", bty='l',xlab = "Year",main = "", flty = 2)
+lines(unemploy.valid, col="red")
+lines(c(2010.1, 2010.1), c(0,12),lwd=3,col="red") 
+text(1998, 12, "Training",cex=1.25)
+text(2015, 12, "Validation",cex=1.25)
+grid()
+
+naive.unemploy.train.err <- unemploy.train - unemploy.qm.naive$fitted
+naive.unemploy.valid.err <- unemploy.valid- unemploy.qm.naive$mean
+unemploy.naive.mse.train <- mean(naive.unemploy.train.err^2, na.rm=TRUE)
+unemploy.naive.mse.test <- mean(naive.unemploy.valid.err^2)
+unemploy.naive.mae.train <- mean(abs(naive.unemploy.train.err), na.rm=TRUE)
+unemploy.naive.mae.test <- mean(abs(naive.unemploy.valid.err))
+sprintf("The training sample naive MSE is %s", round(unemploy.naive.mse.train,5))
+sprintf("The validation sample naive MSE is %s", round(unemploy.naive.mse.test,5))
+sprintf("The training sample naive MAE is %s", round(unemploy.naive.mae.train,5))
+sprintf("The validation sample naive MAE is %s", round(unemploy.naive.mae.test,5))
+```

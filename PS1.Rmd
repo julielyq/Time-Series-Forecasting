@@ -1,0 +1,110 @@
+---
+title: "Problem Set 1 "
+author: "Yunqiu(Julie) Li"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Problem 1
+```{r}
+# Monte-carlo size
+nmc <- 1000
+# Sample size
+nsamp <- 20
+var1 <- rep(0,nmc)
+var2 <- rep(0,nmc)
+
+for (i in 1:nmc) {
+  # generate a sample
+  x <- rnorm(nsamp, mean = 0, sd = 1)
+  # generate sample mean
+  m <- mean(x)
+  # use mean on sample with formula that has bias correction
+  var1[i] <- (1/(nsamp-1))*sum( (x-m)^2 )
+  # use mean on sample with formula that has no bias correction
+  var2[i] <- (1/nsamp)*sum( (x-m)^2 )
+} 
+
+# Compare forecast result
+sprintf("The bias for estimators caculated with bias correction is %s.", round(mean(var1-1), 4))
+sprintf("The bias for estimators caculated without bias correction is %s.", round(mean(var2-1), 4))
+sprintf("The MSE for estimators caculated with bias correction is %s.", round(mean( (var1-1)^2) , 4))
+sprintf("The MSE for estimators caculated without bias correction is %s.", round(mean( (var2-1)^2), 4))
+```
+Base on above result, variance estimator caculated with formula that has usual bias correction has a lower bias(compared using absolute value;could be postive bias or negative bias) but higher MSE. On the other hand, variance estimator caculated with formula that does not have usual bias correction has a lower MSE but higher bias.
+
+# Problem 2
+```{r}
+nmc <- 1000
+nsamp <- 20
+b <- rep(0,nmc)
+se <- rep(0,nmc)
+
+for (i in 1:nmc) {
+  x <- rnorm(nsamp, mean = 0, sd = 1)
+  e <- rnorm(nsamp, mean = 0, sd = 1)
+  y <- 5 + 2*x + e
+  lmod <- lm (y ~ x)
+  modsum <- summary(lmod)
+  b[i]  <- modsum$coefficients[2,1]
+  se[i] <- modsum$coefficients[2,2]
+}
+# standard deviation of b 
+sprintf("The standard deviation of b is %s.", round(sd(b), 4))
+# mean of SE
+sprintf("The mean of standard error is %s.", round(mean(se), 4))
+```
+The standard deviation of b and the mean of standard error are very close.
+
+# Problem 3
+```{r}
+# sample size
+nsamp <- 20
+# number of monte-carlo
+nmc   <- 1000
+# in sample r-square
+r2in <- rep(0,nmc)
+# out of sample r-square
+r2out <- rep(0,nmc)
+# set linear parameter
+beta <- 1
+for (i in 1:nmc) {
+  x <- rnorm(nsamp, mean = 0, sd = 1)
+  e <- rnorm(nsamp, mean = 0, sd = 5)
+  # build linear model
+  y1 <- beta*x + e
+  # fit OLS linear model
+  fitreg <- lm( y1 ~ x)
+  # generate summary statistic from regression model
+  modsum <- summary(fitreg)
+  # in sample forecast (standard r-square from regression)
+  r2in[i] <- modsum$r.squared
+  # build new clean data(reuse model on new data)
+  x2 <- rnorm(nsamp, mean = 0, sd = 1)
+  e2 <- rnorm(nsamp, mean = 0, sd = 5)
+  y2 <- beta*x2 + e2
+  # convert x2 into dataframe 
+  xdf <- data.frame(x=x2)
+  # get out of sample forecast for y
+  yhat2 <- predict(fitreg,xdf)
+  # generat pseudo r-square
+  f1 <- mean(y1)
+  s1 <- sum( (y2-f1)^2 )
+  s2 <- sum( (y2-yhat2)^2 )
+  r2out[i] <- 1-s2/s1
+}
+  
+# a. Compare mean R-squared values in and out of sample
+sprintf("In-sample mean R-squared is %s.", round(mean(r2in), 4))
+sprintf("Out-of-sample mean R-squared is %s.", round(mean(r2out), 4))
+
+# b. 
+hist(r2out, col = "blue", xlab = "R-square", ylab = "Frequency", main = "Distribution of Out-of-sample R-squared")
+
+```
+
+c. Base on the histogram, some of the out of sample R-squared are negative.
+d. The in sample R-squared could not be negative, because the in sample R-squared is generated from the linear model itself, which we use to train the model, and it is very likely to generate overfitting problem.
+e. The out of sample R-squared measure the generalization of the linear training model to testing data. High out of sample R-squared means that the linear model we trained can generalize well to the testing data. It's a kind of forecast comparison on the fitness of training model(whether the model perform well on new data).
+

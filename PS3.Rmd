@@ -1,0 +1,227 @@
+---
+title: "Problem Set 3"
+author: "Yunqiu (Julie) Li"
+date: "2/11/2019"
+output: word_document
+---
+
+
+```{r, message = FALSE, warning= FALSE}
+library(forecast)
+library(ggplot2)
+```
+
+#Problem 1: For this problem load the Logan airport data set from the lecture csv file.
+## 1.Create time series for the domestic and international passengers.
+## 2. Plot both of these lines in the same plot. (Hint, use the plot command, and then the lines command for this. Type help(lines) for help on the lines command.
+```{r}
+# Creat time series
+logan.data <- read.csv("LoganPassengers.csv")
+logan.data <- logan.data[logan.data$total<5000000,]
+logan.dom <- ts(logan.data$domestic, start = c(2002,10), freq = 12)
+logan.int<- ts(logan.data$international, start = c(2002,10), freq = 12)
+logan.ts <- ts(logan.data$total, start = c(2002,10), freq = 12)
+
+# plot time sereis for domestic and international passengers
+plot(logan.dom, xlab="Year", ylab="Passengers", bty="l", ylim=range(90000, 1500000), col = "blue")
+lines(logan.int, col = "red")
+legend("topleft",legend=c("Domestic", "International"),col=c("blue","red"),lty=1:1, cex = 0.7)
+grid()
+```
+
+
+## 3. Describe any similarities and differences between the two.
+
+Similarities:
+
+* The patterns for domestic passengers and international passenger have an upward trend.
+
+* The number of domstic passengers and international passengers both have seasonality variations.
+
+* The seasonality effects tend to increase over time.
+
+Differences:
+
+* The overall scale of internaiontal passengers is way larger than the overall scale of domestic passengers.
+
+* International passengers experience a larger seasonal violatility.
+
+* There is a significant dip in the number of international passengers at the beginning of 2019.
+
+* Within a year, the patterns of fluctuation in domestic passengers and international passengers are different, which indicates distinct customer travel preference.
+## Including Plots
+
+## 4. Repeat this plot for a short window from 2014 to the end of the data set.
+```{r pressure, echo=FALSE}
+logan.dom.zoom <- window(logan.dom,start=c(2014,1))
+logan.int.zoom <- window(logan.int,start=c(2014,1))
+plot(logan.dom.zoom,xlab="Year",ylab="Passengers",bty="l", ylim=range(90000, 1600000), col = "blue")
+lines(logan.int.zoom, col = "red")
+legend("topleft",legend=c("Domestic", "International"),col=c("blue","red"),lty=1:1, cex = 0.7)
+grid()
+```
+
+## 5. Now generate a time series over the full sample of the fraction of international travelers (international/total).
+## 6. Plot this series in a short window from 2014 to the end of the data set. Does this series appear to have any seasonality. Try a plot to look for seasonals with ggseasonplot().
+```{r}
+# time series over the full sample of the fraction of international travelers
+logan.fraction <- logan.int/logan.ts
+logan.fraction.zoom <- window(logan.fraction, start = c(2014,1))
+# plot of fraction series
+plot(logan.fraction.zoom, xlab = "Year", ylab = "Fraction of International Travelers", ylim = c(0.1,0.25), col = "blue")
+grid()
+# seasonal plot
+ggseasonplot(logan.fraction.zoom)
+```
+
+
+
+## 7. Report the autocorrelations for the series with 30 lags. Do you see any interesting patterns? Do this for the full sample only.
+```{r}
+p <- ggAcf(logan.fraction, lag = 30)
+p
+```
+
+
+## 8. Now take a twelve lag difference of your time series. Do this with the diff function and use the argument lag=12. This now converts your series into month to same month changes. Plot this new series.
+## 9. Plot the autocorrelations of this series. Are they similar or different to your autocorrelations on the raw series?
+```{r}
+# take 12 lag difference of fraction time series and plot
+p2 <- ggAcf(diff(logan.fraction, lag = 12))
+p2
+```
+They are quite different. In the raw series plot, the ACF is sometimes positive and sometimes negative, which indicates that the correlation of fraction of international passengers to the fraction of international passengers 30 months before could be positive or negative. However, in the twelve lag difference plot, the ACF is always positive, which indicates that fraction of international passengers has a positive relatinship with fraction of international passengers a year before.
+
+# Problem 2: Continue using the Logan airport data in this section. For this question use the total number of passengers. Divide the data into testing and validation periods. Start the validation data in January, 2012. All earlier data is training.
+## 1. Estimate a cubic trend on the training data. Plot the fitted model, and your forecast as we have done in class.
+## 2. Report the MSE, and MAE for this model in both the training and validation periods.
+```{r}
+# split training and validation data
+train.ts <- window(logan.ts, end = c(2011, 12))
+valid.ts <- window(logan.ts, start = c(2012, 1))
+
+# fit cubic trend model
+logan.lm <- tslm(train.ts ~ trend + I(trend^2) + I(trend^3))
+logan.lm.pred <- forecast(logan.lm, h = length(valid.ts), level = 0)
+
+# Plot fitted model and forecast
+plot(logan.lm.pred,  ylab = "Passengers", xlab = "Time", bty = "l", xaxt="n", 
+     ylim=c(700000,1800000),xlim = c(2002,2018), main="", flty = 2)
+axis(1, at = seq(2002, 2018, 1)) 
+lines(logan.lm$fitted.values, lwd=2, col="black")
+lines(c(2012, 2012), c(0, 1800000), lwd=3, col="red")
+lines(valid.ts)
+grid()
+text(2008, 750000, "Training", cex=1.25)
+text(2017, 750000, "Validation", cex=1.25)
+
+# training and validation error
+train.err <- train.ts - logan.lm$fitted.values
+valid.err <- valid.ts - logan.lm.pred$mean
+
+# MSE ane MAE
+mse.train <- mean( sqrt( train.err^2 ) )
+mse.valid <- mean( sqrt( valid.err^2 ) )
+mae.train <- mean( abs(train.err) )
+mae.valid <- mean( abs(valid.err) )
+sprintf("The training sample MSE is %s", round(mse.train,2))
+sprintf("The validation sample MSE is %s", round(mse.valid,2))
+sprintf("The training sample MAE is %s", round(mae.train,2))
+sprintf("The validation sample MAE is %s", round(mae.valid,2))
+```
+
+## 3. Now fit a naive (random walk) model and report its MSE and MAE in the validation period.
+```{r}
+# naive model
+logan.lm.naive <- naive(train.ts, h = length(valid.ts))
+
+# validation error
+valid.err.naive <- valid.ts - logan.lm.naive$mean
+
+# MSE and MAE
+mse.valid.naive <- mean( sqrt( valid.err.naive^2 ) )
+mae.valid.naive <- mean( abs( valid.err.naive ) )
+sprintf("The validation sample MSE is %s", round(mse.valid.naive,2))
+sprintf("The validation sample MAE is %s", round(mae.valid.naive,2))
+```
+
+## 4. Repeat this for the seasonal naive model, snaive().
+```{r}
+# seasonal naive model
+logan.lm.snaive <- snaive(train.ts, h = length(valid.ts), level=0)
+
+# validation error
+valid.err.snaive <- valid.ts - logan.lm.snaive$mean
+
+# MSE and MAE
+mse.valid.snaive <- mean( sqrt( valid.err.snaive^2 ) )
+mae.valid.snaive <- mean( abs( valid.err.snaive ) )
+sprintf("The validation sample MSE is %s", round(mse.valid.snaive,2))
+sprintf("The validation sample MAE is %s", round(mae.valid.snaive,2))
+
+```
+
+## 5. Set up a time series cross validation experiment with the cubic model. Generate cross validated forecasts in the validation period as we did in class. Report the MSE in the validation period.
+```{r}
+cubtrend <- function(x, h){
+  fmod <- tslm(x ~ trend + I(trend^2)+I(trend^3))
+  forecast(fmod, h = h)
+}
+eCV <- tsCV(logan.ts,cubtrend, h = 1)
+eCVValid <- eCV[-(1:length(train.ts)) ]
+mseCVValid <- mean( sqrt(eCVValid^2), na.rm=T)
+sprintf("The MSE in the validation period is %s", round(mseCVValid, 2))
+```
+
+
+## 6. Repeat this cross validation using a naive random walk forecast, but letting the forecast move along with the cross validation, and forecasting one step ahead each time. This is a little tricky, but it can be done with the naive() function setting h=1. This goes into your function for tsCV(). Remember that naive() returns a forecast object. (There is no estimation.) Report the MSE in the validation period as before.
+```{r}
+naivetrend <- function(x, h){
+  fmod <- naive(train.ts, h = h)
+  forecast(fmod, h = h)
+}
+eCV.naive <- tsCV(logan.ts, naivetrend, h = 1)
+eCVValid.naive <- eCV.naive[-(1:length(train.ts)) ]
+mseCVValid.naive <- mean( sqrt(eCVValid.naive^2), na.rm = T)
+sprintf("The MSE in the validation period is %s", round(mseCVValid.naive, 2))
+```
+
+
+## 7. Finally, replace the naive forecast with the seasonal naive forecast, snaive(). Again, report the MSE in the validation period.
+```{r}
+snaivetrend <- function(x, h){
+  fmod <- snaive(train.ts, h = h)
+  forecast(fmod, h = h)
+}
+eCV.snaive <- tsCV(logan.ts, snaivetrend, h = 1)
+eCVValid.snaive <- eCV.snaive[-(1:length(train.ts)) ]
+mseCVValid.snaive <- mean( sqrt(eCVValid.snaive^2), na.rm=TRUE)
+sprintf("The MSE in the validation period is %s", round(mseCVValid.snaive, 2))
+```
+
+
+## 8. Discuss the relative magnitudes of your various forecasting methods (from parts (2), (3), (4), (5), (6), (7)).
+```{r}
+tbl = as.table(c(mse.valid, mse.valid.naive, mse.valid.snaive, mseCVValid, mseCVValid.naive, mseCVValid.snaive))
+names(tbl) = c("mse.valid", "mse.valid.naive", "mse.valid.snaive", "mseCVValid", "mseCVValid.naive", "mseCVValid.snaive")
+tbl
+```
+Based on the above table, we can tell that when we are using the cubic trend model, the validation sample MSE is way larger compared to the validation MSE we got when we generate cross validation forecast using cubic trend model. However, if we are using the naive or sesonal naive model, the validation sample MSE is smaller compared to the validation MSE when we generate cross validation forecast using naive or seasonal naive model.
+
+
+# In this problem you are to compare the MSE for several different data pairs. In each case answer which is smallest, or not enough information to tell. Assume that the function MSE(X,Y) represents the mean squared error for a model estimated on X, and MSE estimated on Y. Estimation uses some form of estimator that minimizes squared errors, like ordinary least squares. For example, a model estimated on the training data, and MSE evaluated on the validation data would be MSE(train,valid). train and valid refer to a 50/50 split of the data set (proportion doesn’t really matter). Let full refer to the entire data set.
+
+## 1.MSE(train,train) versus MSE(train,valid)
+MSE(train,train)
+
+## 2.MSE(train,valid) versus MSE(valid,valid)
+MSE(valid,valid)
+
+## 3.MSE(full,full) versus MSE(valid,valid)
+Not enough information to tell
+
+## 4.MSE(train,full) versus MSE(full,full)
+MSE(full,full)
+
+## 5.MSE(valid,train) versus MSE(train,train)
+MSE(train,train)
